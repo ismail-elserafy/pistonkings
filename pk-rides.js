@@ -201,22 +201,23 @@
              + "background-color:transparent;text-decoration:none;"
              + "transition:background-color .18s ease,color .18s ease,border-color .18s ease";
 
-    return '<article style="border:1px solid '+LINE+';background:'+CARD+';overflow:hidden">'
-      + '<div style="aspect-ratio:16/9;background:'+FRAME+'">'
+    return '<article style="border:1px solid '+LINE+';background:'+CARD+';overflow:hidden;'
+      + 'display:flex;flex-direction:column;height:100%">'
+      + '<div style="aspect-ratio:16/9;background:'+FRAME+';flex:0 0 auto">'
       +   (img ? '<img src="'+esc(img)+'" alt="'+esc(r.name)+'" loading="lazy"'
               + ' referrerpolicy="no-referrer"'
               + ' onerror="this.style.display=\'none\'"'
               + ' style="width:100%;height:100%;object-fit:cover;display:block">' : '')
       + '</div>'
-      + '<div style="padding:18px">'
-      +   '<h3 style="margin:0;font-size:22px;line-height:1.2;color:'+TEXT+'">'+esc(r.name)+'</h3>'
+      + '<div style="padding:18px;display:flex;flex-direction:column;flex:1 1 auto">'
+      +   '<h3 style="margin:0;font-size:22px;line-height:1.2;min-height:2.4em;color:'+TEXT+'">'+esc(r.name)+'</h3>'
       +   (String(r.area||"").trim()
             ? '<div class="pk-area" style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:'+MUTED+';margin:6px 0 10px">'+esc(r.area)+'</div>'
             : '<div style="height:10px"></div>')
       +   '<div class="pk-stars" style="color:'+STAR+';font-size:16px;letter-spacing:.1em">'+stars(r.rating)+'</div>'
       +   (tags ? '<div class="pk-tags" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:'+DIM+';margin:10px 0 16px">'+esc(tags)+'</div>'
                 : '<div style="height:16px"></div>')
-      +   '<div style="display:flex;gap:8px">'
+      +   '<div style="display:flex;gap:8px;margin-top:auto">'
       +     '<a href="'+esc(gmap)+'" target="_blank" rel="noopener" style="'+btn+'">Google Maps</a>'
       +     '<a href="'+esc(waze)+'" target="_blank" rel="noopener" style="'+btn+'">Waze</a>'
       +   '</div>'
@@ -266,7 +267,7 @@
       }).join("");
 
       host.innerHTML = cards
-        ? '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;font-family:inherit">' + cards + '</div>'
+        ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:20px;align-items:stretch;font-family:inherit">' + cards + '</div>'
         : '<p class="pk-msg" style="font-size:13px">No rides in the <b>'+esc(tab)+'</b> tab yet.</p>';
     }).catch(function(){
       host.innerHTML = '<p class="pk-msg" style="font-size:13px">Could not read the <b>'+esc(tab)
