@@ -203,11 +203,11 @@
 
     return '<article style="border:1px solid '+LINE+';background:'+CARD+';overflow:hidden;'
       + 'display:flex;flex-direction:column;height:100%">'
-      + '<div style="aspect-ratio:16/9;background:'+FRAME+';flex:0 0 auto">'
+      + '<div style="position:relative;width:100%;aspect-ratio:16/9;background:'+FRAME+';flex:0 0 auto;overflow:hidden">'
       +   (img ? '<img src="'+esc(img)+'" alt="'+esc(r.name)+'" loading="lazy"'
               + ' referrerpolicy="no-referrer"'
               + ' onerror="this.style.display=\'none\'"'
-              + ' style="width:100%;height:100%;object-fit:cover;display:block">' : '')
+              + ' style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block">' : '')
       + '</div>'
       + '<div style="padding:18px;display:flex;flex-direction:column;flex:1 1 auto">'
       +   '<h3 style="margin:0;font-size:22px;line-height:1.2;min-height:2.4em;color:'+TEXT+'">'+esc(r.name)+'</h3>'
