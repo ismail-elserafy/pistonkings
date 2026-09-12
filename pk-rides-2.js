@@ -105,8 +105,11 @@
 
   function stars(v){
     var s = String(v == null ? "" : v).trim();
+    if (!s) return "";
     var typed = (s.match(/\u2605/g) || []).length;
-    var n = typed ? typed : parseFloat((s.match(/-?\d+(\.\d+)?/) || [0])[0]);
+    var num   = s.match(/-?\d+(\.\d+)?/);
+    if (!typed && !num) return "";        // "N/A", "-", "TBC" etc.
+    var n = typed ? typed : parseFloat(num[0]);
     n = Math.max(0, Math.min(5, Math.round(n || 0)));
     return "\u2605\u2605\u2605\u2605\u2605\u2606\u2606\u2606\u2606\u2606".slice(5-n, 10-n);
   }
@@ -186,6 +189,7 @@
     var est  = (!r.distance || !r.time) ? estimate(origin, dest) : { d:"", t:"" };
     var dist = r.distance || est.d;
     var time = r.time || est.t;
+    var rate = stars(r.rating);
 
     var gmap = ll ? "https://www.google.com/maps/dir/?api=1&destination=" + ll + "&travelmode=driving"
              : r.link ? r.link
@@ -214,7 +218,7 @@
       +   (String(r.area||"").trim()
             ? '<div class="pk-area" style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:'+MUTED+';margin:6px 0 10px">'+esc(r.area)+'</div>'
             : '<div style="height:10px"></div>')
-      +   '<div class="pk-stars" style="color:'+STAR+';font-size:16px;letter-spacing:.1em">'+stars(r.rating)+'</div>'
+      +   (rate ? '<div class="pk-stars" style="color:'+STAR+';font-size:16px;letter-spacing:.1em">'+rate+'</div>' : '')
       +   (tags ? '<div class="pk-tags" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:'+DIM+';margin:10px 0 16px">'+esc(tags)+'</div>'
                 : '<div style="height:16px"></div>')
       +   '<div style="display:flex;gap:8px;margin-top:auto">'
