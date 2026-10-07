@@ -1,4 +1,4 @@
-/* Piston Kings - ride cards + rendezvous island
+/* Piston Kings - ride cards + starting-point picker
    Renders ride cards from a Google Sheet tab into any element with class
    "pk-rides". Each element chooses its own tab:
 
@@ -8,17 +8,15 @@
        data-origin="H1"    cell holding the departure Maps link ("" to switch off)
        data-sheet="..."    a different sheet ID for that block
 
-   Rendezvous island (optional, one per page, place it above the cards):
+   Starting-point picker (optional, one block per page):
 
-       <div class="pk-island" data-tab="Rendezvous"></div>
+       <div class="pk-rides" data-tab="Meet" data-pick="1"></div>
 
-   Reads point names + Maps links (or lat/lng) from that tab and shows them
-   as tappable chips. The first point is picked by default. Picking a point
-   recalculates every card's distance and time from that point. When the
-   island is on the page it replaces the data-origin cell, and its estimates
-   replace any distance/time typed into the ride sheet.
-   On scroll it shrinks to a floating pill showing only the picked point;
-   tap it to open the full list again.
+   Every card in that block becomes tappable. The first card is picked by
+   default and outlined in orange. Picking a card recalculates distance and
+   time on every other block from that point (these replace any distance/time
+   typed into the sheet). The picker's own cards show no estimates. When a
+   picker is on the page it replaces the data-origin cell.
 */
 (function(){
   "use strict";
@@ -60,47 +58,16 @@
     + ".pk-rides .pk-msg       { color: " + MUTED + " !important; }"
     + ".pk-rides .pk-msg-faint { color: " + FAINT + " !important; }"
 
-    // --- island ---
-    + ".pk-island              { display: block; margin: 0 0 24px; }"
-    + ".pk-island-bar          { display: flex; align-items: center; gap: 12px; box-sizing: border-box;"
-    + "                          width: max-content; max-width: 100%; margin: 0 auto;"
-    + "                          padding: 6px 6px 6px 18px; background: " + CARD + ";"
-    + "                          border: 1px solid " + LINE + "; border-radius: 999px;"
-    + "                          font-family: inherit;"
-    + "                          transition: box-shadow .25s ease, padding .25s ease; }"
-    + ".pk-island-label        { flex: 0 0 auto; font-size: 11px; letter-spacing: .14em;"
-    + "                          text-transform: uppercase; white-space: nowrap;"
-    + "                          color: " + MUTED + " !important; }"
-    + ".pk-island-chips        { position: relative; display: flex; gap: 6px; min-width: 0;"
-    + "                          overflow-x: auto; scrollbar-width: none;"
-    + "                          -webkit-overflow-scrolling: touch; }"
-    + ".pk-island-chips::-webkit-scrollbar { display: none; }"
-    + ".pk-island .pk-chip     { -webkit-appearance: none; appearance: none; flex: 0 0 auto; margin: 0;"
-    + "                          font-family: inherit; font-size: 11px !important; line-height: 1.2;"
-    + "                          letter-spacing: .12em; text-transform: uppercase; white-space: nowrap;"
-    + "                          padding: 10px 16px !important; cursor: pointer;"
-    + "                          border: 1px solid " + TEXT + " !important; border-radius: 999px !important;"
-    + "                          background-color: transparent !important; color: " + TEXT + " !important;"
-    + "                          box-shadow: none !important;"
-    + "                          transition: background-color .18s ease, color .18s ease,"
-    + "                                      border-color .18s ease; }"
-    + ".pk-island .pk-chip:hover,"
-    + ".pk-island .pk-chip:focus-visible { background-color: " + TEXT + " !important; color: #000 !important; }"
-    + ".pk-island .pk-chip.pk-on { background-color: " + STAR + " !important;"
-    + "                          border-color: " + STAR + " !important; color: #000 !important; }"
-    + ".pk-island-caret        { display: none; flex: 0 0 auto; padding-right: 10px;"
-    + "                          font-size: 12px; color: " + MUTED + " !important; }"
-
-    // floating (scrolled past) state
-    + ".pk-island.pk-stuck .pk-island-bar { position: fixed; left: 50%; top: var(--pk-top, 12px);"
-    + "                          transform: translateX(-50%); z-index: 1000;"
-    + "                          max-width: calc(100vw - 24px);"
-    + "                          box-shadow: 0 10px 30px rgba(0,0,0,.55); }"
-    + ".pk-island.pk-stuck:not(.pk-open) .pk-island-bar   { cursor: pointer; padding-left: 14px; }"
-    + ".pk-island.pk-stuck:not(.pk-open) .pk-chip:not(.pk-on) { display: none; }"
-    + ".pk-island.pk-stuck:not(.pk-open) .pk-island-caret { display: block; }"
+    // --- starting-point picker ---
+    + ".pk-rides .pk-pickable  { cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease; }"
+    + ".pk-rides .pk-pickable:hover { border-color: " + TEXT + " !important; }"
+    + ".pk-rides .pk-pickable:focus-visible { outline: 2px solid " + TEXT + "; outline-offset: 2px; }"
+    + ".pk-rides .pk-pickable.pk-on { border-color: " + STAR + " !important;"
+    + "                          box-shadow: 0 0 0 1px " + STAR + "; }"
+    + ".pk-rides .pk-pick      { color: " + FAINT + " !important; transition: color .18s ease; }"
+    + ".pk-rides .pk-on .pk-pick { color: " + STAR + " !important; }"
     + "@media (prefers-reduced-motion: reduce) {"
-    + "  .pk-island-bar, .pk-island .pk-chip, .pk-rides .pk-tags { transition: none !important; } }";
+    + "  .pk-rides .pk-pickable, .pk-rides .pk-pick { transition: none !important; } }";
 
   function injectcss(){
     if (document.getElementById("pk-rides-css")) return;
@@ -199,9 +166,9 @@
   }
 
   // --- shared origin ----------------------------------------------------
-  // Set by the island. Every card block listens and re-tags when it changes.
-  var PICKED = null;                     // [lat, lng] of the picked rendezvous point
-  var islandReady = null;                // resolves once the island has picked its default
+  // Set by the picker block. Every card block listens and re-tags when it changes.
+  var PICKED = null;                     // [lat, lng] of the picked starting point
+  var pickReady = null;                  // resolves once the picker block has picked its default
   var listeners = [];
   function setorigin(ll){
     PICKED = ll;
@@ -248,7 +215,7 @@
       .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 
-  // o = { ll: [lat,lng] | null, live: true when it came from the island }
+  // o = { ll: [lat,lng] | null, live: true when it came from the picker }
   // Live estimates win over typed distance/time; otherwise typed values win.
   function tagsfor(r, o){
     var dest = llfrom(r.lat, r.lng, r.link);
@@ -278,7 +245,9 @@
              + "background-color:transparent;text-decoration:none;"
              + "transition:background-color .18s ease,color .18s ease,border-color .18s ease";
 
-    return '<article style="border:1px solid '+LINE+';background:'+CARD+';overflow:hidden;'
+    var pick = r.pickable;
+    return '<article' + (pick ? ' class="pk-pickable" tabindex="0" role="button" aria-pressed="false"' : '')
+      + ' style="border:1px solid '+LINE+';background:'+CARD+';overflow:hidden;'
       + 'display:flex;flex-direction:column;height:100%">'
       + '<div style="position:relative;width:100%;aspect-ratio:16/9;background:'+FRAME+';flex:0 0 auto;overflow:hidden">'
       +   (img ? '<img src="'+esc(img)+'" alt="'+esc(r.name)+'" loading="lazy"'
@@ -292,8 +261,11 @@
             ? '<div class="pk-area" style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:'+MUTED+';margin:6px 0 10px">'+esc(r.area)+'</div>'
             : '<div style="height:10px"></div>')
       +   (rate ? '<div class="pk-stars" style="color:'+STAR+';font-size:16px;letter-spacing:.1em">'+rate+'</div>' : '')
-      // Always rendered (even empty) so the island can update it in place.
-      +   '<div class="pk-tags" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:'+DIM+';margin:10px 0 16px;min-height:1.3em">'+esc(tags)+'</div>'
+      +   (pick
+            ? (tags ? '<div class="pk-tags" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:'+DIM+';margin:10px 0 0">'+esc(tags)+'</div>' : '')
+            + '<div class="pk-pick" style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:'+FAINT+';margin:10px 0 16px">Tap to start here</div>'
+            // Always rendered (even empty) so the picker can update it in place.
+            : '<div class="pk-tags" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:'+DIM+';margin:10px 0 16px;min-height:1.3em">'+esc(tags)+'</div>')
       +   '<div style="display:flex;gap:8px;margin-top:auto">'
       +     '<a href="'+esc(gmap)+'" target="_blank" rel="noopener" style="'+btn+'">Google Maps</a>'
       +     '<a href="'+esc(waze)+'" target="_blank" rel="noopener" style="'+btn+'">Waze</a>'
@@ -313,98 +285,8 @@
     return pending[k];
   }
 
-  // --- rendezvous island ------------------------------------------------
-  function headerbottom(){
-    // Odoo's header is often fixed/sticky; float the island just below it.
-    var h = document.querySelector("header#top") || document.querySelector("header");
-    if (!h) return 0;
-    if (!/fixed|sticky/.test(getComputedStyle(h).position)) return 0;
-    var b = h.getBoundingClientRect().bottom;
-    return b > 0 ? b : 0;
-  }
-
-  function island(host){
+  function render(host, picker){
     if (host.getAttribute("data-pk-done")) return null;
-    host.setAttribute("data-pk-done", "1");
-
-    var tab = host.getAttribute("data-tab") || "Rendezvous";
-    var id  = host.getAttribute("data-sheet") || SHEET_ID;
-
-    return sheet(id, tab).then(function(rows){
-      var idx = mapheaders(rows[0] || []);
-      function g(row, f){ return idx[f] === undefined ? "" : (row[idx[f]] || "").trim(); }
-      var pts = rows.slice(1).map(function(row){
-        return { name: g(row,"name"), ll: llfrom(g(row,"lat"), g(row,"lng"), g(row,"link")) };
-      }).filter(function(p){ return p.name && p.ll; });
-
-      if (!pts.length) { host.style.display = "none"; return; }
-
-      host.innerHTML = '<div class="pk-island-bar" role="group" aria-label="Rendezvous point">'
-        + '<span class="pk-island-label">Riding from</span>'
-        + '<div class="pk-island-chips">'
-        +   pts.map(function(p, i){
-              return '<button type="button" class="pk-chip" data-i="'+i+'" aria-pressed="false">'+esc(p.name)+'</button>';
-            }).join("")
-        + '</div>'
-        + '<span class="pk-island-caret" aria-hidden="true">\u25BE</span>'
-        + '</div>';
-
-      var bar   = host.querySelector(".pk-island-bar");
-      var strip = host.querySelector(".pk-island-chips");
-      var chips = host.querySelectorAll(".pk-chip");
-
-      function pick(i){
-        for (var j=0;j<chips.length;j++){
-          var on = j === i;
-          chips[j].classList.toggle("pk-on", on);
-          chips[j].setAttribute("aria-pressed", on ? "true" : "false");
-        }
-        var c = chips[i];
-        strip.scrollTo({ left: c.offsetLeft - strip.clientWidth/2 + c.offsetWidth/2, behavior: "smooth" });
-        setorigin(pts[i].ll);
-      }
-
-      bar.addEventListener("click", function(e){
-        var compact = host.classList.contains("pk-stuck") && !host.classList.contains("pk-open");
-        if (compact) { host.classList.add("pk-open"); return; }
-        var chip = e.target.closest(".pk-chip");
-        if (chip) { pick(+chip.getAttribute("data-i")); host.classList.remove("pk-open"); }
-      });
-      document.addEventListener("click", function(e){
-        if (!host.contains(e.target)) host.classList.remove("pk-open");
-      });
-
-      // Float as a compact pill once scrolled past; hold its space so nothing jumps.
-      var stuck = false, ticking = false;
-      function check(){
-        ticking = false;
-        var top = headerbottom() + 12;
-        var past = host.getBoundingClientRect().top < top;
-        host.style.setProperty("--pk-top", top + "px");
-        if (past && !stuck) {
-          host.style.height = host.offsetHeight + "px";
-          host.classList.add("pk-stuck");
-          stuck = true;
-        } else if (!past && stuck) {
-          host.classList.remove("pk-stuck", "pk-open");
-          host.style.height = "";
-          stuck = false;
-        }
-      }
-      function onscroll(){ if (!ticking) { ticking = true; requestAnimationFrame(check); } }
-      window.addEventListener("scroll", onscroll, { passive: true });
-      window.addEventListener("resize", onscroll);
-      check();
-
-      pick(0);                             // first point is the default
-    }).catch(function(){
-      host.style.display = "none";         // no island: cards fall back to data-origin
-    });
-  }
-  // ----------------------------------------------------------------------
-
-  function render(host){
-    if (host.getAttribute("data-pk-done")) return;
     host.setAttribute("data-pk-done", "1");
 
     var tab    = host.getAttribute("data-tab") || "Meet";
@@ -413,13 +295,17 @@
 
     host.innerHTML = '<p class="pk-msg-faint" style="font-size:13px;font-family:inherit">Loading rides\u2026</p>';
 
-    Promise.all([sheet(id, tab), islandReady]).then(function(res){
+    // The picker draws straight away; every other block waits for its default pick.
+    return Promise.all([sheet(id, tab), picker ? null : pickReady]).then(function(res){
       var rows = res[0];
       if (!rows.length) throw new Error("empty");
 
       var fallback = null, ref = cellref(ocell);
       if (ref && rows[ref.row]) fallback = llfrom("", "", rows[ref.row][ref.col]);
-      function origin(){ return PICKED ? { ll: PICKED, live: true } : { ll: fallback, live: false }; }
+      function origin(){
+        if (picker) return { ll: null, live: false };      // starting points get no estimates
+        return PICKED ? { ll: PICKED, live: true } : { ll: fallback, live: false };
+      }
 
       var idx = mapheaders(rows[0]);
       if (idx.name === undefined) idx = { link:0, name:1, area:2, lat:3, lng:4,
@@ -427,12 +313,15 @@
       function get(row, f){ return idx[f] === undefined ? "" : (row[idx[f]] || "").trim(); }
 
       var items = rows.slice(1).filter(function(row){ return get(row,"name"); }).map(function(row){
-        return {
+        var r = {
           name:get(row,"name"), link:get(row,"link"), area:get(row,"area"),
           lat:get(row,"lat"), lng:get(row,"lng"), distance:get(row,"distance"),
           time:get(row,"time"), road:get(row,"road"), rating:get(row,"rating"),
           photo:get(row,"photo"), waze:get(row,"waze")
         };
+        r.ll = llfrom(r.lat, r.lng, r.link);
+        r.pickable = !!(picker && r.ll);                 // can't start from a point with no location
+        return r;
       });
 
       var o = origin();
@@ -442,7 +331,36 @@
         ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:20px;align-items:stretch;font-family:inherit">' + cards + '</div>'
         : '<p class="pk-msg" style="font-size:13px">No rides in the <b>'+esc(tab)+'</b> tab yet.</p>';
 
-      // Island changed point: update only the distance/time line, so photos don't reload.
+      if (picker) {
+        var arts = host.querySelectorAll("article");
+        var pick = function(i){
+          for (var j=0;j<arts.length;j++){
+            if (!items[j].pickable) continue;
+            var on = j === i;
+            arts[j].classList.toggle("pk-on", on);
+            arts[j].setAttribute("aria-pressed", on ? "true" : "false");
+            var hint = arts[j].querySelector(".pk-pick");
+            if (hint) hint.textContent = on ? "\u25CF Starting here" : "Tap to start here";
+          }
+          setorigin(items[i].ll);
+        };
+        var which = function(e){
+          if (e.target.closest("a")) return -1;          // Maps / Waze buttons still just open
+          var art = e.target.closest(".pk-pickable");
+          return art ? Array.prototype.indexOf.call(arts, art) : -1;
+        };
+        host.addEventListener("click", function(e){
+          var i = which(e); if (i !== -1) pick(i);
+        });
+        host.addEventListener("keydown", function(e){
+          if (e.key !== "Enter" && e.key !== " ") return;
+          var i = which(e); if (i !== -1) { e.preventDefault(); pick(i); }
+        });
+        for (var k=0;k<items.length;k++) if (items[k].pickable) { pick(k); break; }   // first is default
+        return;
+      }
+
+      // Picker changed point: update only the distance/time line, so photos don't reload.
       listeners.push(function(){
         var now = origin(), els = host.querySelectorAll(".pk-tags");
         items.forEach(function(r, i){ if (els[i]) els[i].textContent = tagsfor(r, now); });
@@ -455,10 +373,10 @@
 
   function start(){
     injectcss();
-    var isl = document.querySelector(".pk-island");
-    if (isl) islandReady = island(isl);
+    var picker = document.querySelector(".pk-rides[data-pick]");
+    if (picker) pickReady = render(picker, true);
     var hosts = document.querySelectorAll(".pk-rides");
-    for (var i=0;i<hosts.length;i++) render(hosts[i]);
+    for (var i=0;i<hosts.length;i++) render(hosts[i], false);
   }
 
   if (document.readyState === "loading") {
