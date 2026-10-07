@@ -17,6 +17,9 @@
    time on every other block from that point (these replace any distance/time
    typed into the sheet). The picker's own cards show no estimates. When a
    picker is on the page it replaces the data-origin cell.
+   Once the picker scrolls out of view a floating pill shows the current
+   starting point; tapping it scrolls back up to the picker. Pages without a
+   data-pick block (e.g. FIX) get no pill.
 */
 (function(){
   "use strict";
@@ -66,8 +69,27 @@
     + "                          box-shadow: 0 0 0 1px " + STAR + "; }"
     + ".pk-rides .pk-pick      { color: " + FAINT + " !important; transition: color .18s ease; }"
     + ".pk-rides .pk-on .pk-pick { color: " + STAR + " !important; }"
+    // floating "starting from" pill
+    + ".pk-float               { position: fixed; left: 50%; top: var(--pk-top, 12px); z-index: 1000;"
+    + "                          display: flex; align-items: center; gap: 10px; box-sizing: border-box;"
+    + "                          max-width: calc(100vw - 24px); margin: 0; cursor: pointer;"
+    + "                          padding: 6px 14px 6px 16px; font-family: inherit;"
+    + "                          background: " + CARD + " !important; border: 1px solid " + LINE + " !important;"
+    + "                          border-radius: 999px !important; box-shadow: 0 10px 30px rgba(0,0,0,.55);"
+    + "                          opacity: 0; pointer-events: none; transform: translate(-50%, -12px);"
+    + "                          transition: opacity .2s ease, transform .2s ease, border-color .18s ease; }"
+    + ".pk-float.pk-show       { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }"
+    + ".pk-float:hover,"
+    + ".pk-float:focus-visible { border-color: " + TEXT + " !important; outline: none; }"
+    + ".pk-float-label         { flex: 0 0 auto; font-size: 11px; letter-spacing: .14em; text-transform: uppercase;"
+    + "                          white-space: nowrap; color: " + MUTED + " !important; }"
+    + ".pk-float-name          { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+    + "                          font-size: 11px; letter-spacing: .12em; text-transform: uppercase;"
+    + "                          padding: 9px 14px; border-radius: 999px;"
+    + "                          background: " + STAR + "; color: #000 !important; }"
+    + ".pk-float-caret         { flex: 0 0 auto; font-size: 12px; color: " + MUTED + " !important; }"
     + "@media (prefers-reduced-motion: reduce) {"
-    + "  .pk-rides .pk-pickable, .pk-rides .pk-pick { transition: none !important; } }";
+    + "  .pk-rides .pk-pickable, .pk-rides .pk-pick, .pk-float { transition: none !important; } }";
 
   function injectcss(){
     if (document.getElementById("pk-rides-css")) return;
@@ -175,6 +197,52 @@
     listeners.forEach(function(fn){ fn(); });
   }
   // ----------------------------------------------------------------------
+
+  function headerbottom(){
+    // Odoo's header is often fixed/sticky; keep floating bits just below it.
+    var h = document.querySelector("header#top") || document.querySelector("header");
+    if (!h) return 0;
+    if (!/fixed|sticky/.test(getComputedStyle(h).position)) return 0;
+    var b = h.getBoundingClientRect().bottom;
+    return b > 0 ? b : 0;
+  }
+
+  // Floating pill: shows the starting point once the picker is off screen,
+  // tap to scroll back to it. Returns a function that sets the shown name.
+  function floatpill(host){
+    var el = document.createElement("button");
+    el.type = "button";
+    el.className = "pk-float";
+    el.setAttribute("aria-label", "Change starting point");
+    el.innerHTML = '<span class="pk-float-label">Riding from</span>'
+                 + '<span class="pk-float-name"></span>'
+                 + '<span class="pk-float-caret" aria-hidden="true">\u25B4</span>';
+    document.body.appendChild(el);
+    var name = el.querySelector(".pk-float-name");
+    var target = host.closest("section") || host;      // the RIDE section holding the Meet cards
+
+    el.addEventListener("click", function(){
+      var y = target.getBoundingClientRect().top + window.pageYOffset - headerbottom() - 12;
+      var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.scrollTo({ top: Math.max(0, y), behavior: still ? "auto" : "smooth" });
+    });
+
+    var ticking = false;
+    function check(){
+      ticking = false;
+      var top = headerbottom() + 12;
+      el.style.setProperty("--pk-top", top + "px");
+      var gone = host.getBoundingClientRect().bottom < top;   // picker scrolled past
+      el.classList.toggle("pk-show", gone);
+      el.tabIndex = gone ? 0 : -1;
+    }
+    function onscroll(){ if (!ticking) { ticking = true; requestAnimationFrame(check); } }
+    window.addEventListener("scroll", onscroll, { passive: true });
+    window.addEventListener("resize", onscroll);
+    check();
+
+    return function(n){ name.textContent = n; };
+  }
 
   // --- photo handling ---------------------------------------------------
   // Rewrites a googleusercontent URL to the size we want. Maps embeds a tiny
@@ -333,6 +401,7 @@
 
       if (picker) {
         var arts = host.querySelectorAll("article");
+        var showname = floatpill(host);
         var pick = function(i){
           for (var j=0;j<arts.length;j++){
             if (!items[j].pickable) continue;
@@ -342,6 +411,7 @@
             var hint = arts[j].querySelector(".pk-pick");
             if (hint) hint.textContent = on ? "\u25CF Starting here" : "Tap to start here";
           }
+          showname(items[i].name);
           setorigin(items[i].ll);
         };
         var which = function(e){
